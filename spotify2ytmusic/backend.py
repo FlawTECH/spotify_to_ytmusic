@@ -10,6 +10,7 @@ from ytmusicapi import YTMusic
 from typing import Optional, Union, Iterator, Dict, List
 from collections import namedtuple
 from dataclasses import dataclass, field
+from .ytmusic_credentials import setup_ytmusic_with_raw_headers
 
 
 SongInfo = namedtuple("SongInfo", ["title", "artist", "album"])
@@ -375,16 +376,18 @@ def copier(
     tracks_added_set = set()
     duplicate_count = 0
     error_count = 0
+    src_tracks = list(src_tracks)
+    src_track_len = len(src_tracks)
 
     for src_track in src_tracks:
-        print(f"Spotify:   {src_track.title} - {src_track.artist} - {src_track.album}")
+        print(f"[{len(tracks_added_set) + 1}/{src_track_len}] Spotify: {src_track.title} - {src_track.artist} - {src_track.album}")
 
         try:
             dst_track = lookup_song(
                 yt, src_track.title, src_track.artist, src_track.album, yt_search_algo
             )
         except Exception as e:
-            print(f"ERROR: Unable to look up song on YTMusic: {e}")
+            print(f"[{len(tracks_added_set) + 1}/{src_track_len}] ERROR: Unable to look up song on YTMusic: {e}")
             error_count += 1
             continue
 
@@ -392,16 +395,15 @@ def copier(
         if "artists" in dst_track and len(dst_track["artists"]) > 0:
             yt_artist_name = dst_track["artists"][0]["name"]
         print(
-            f"  Youtube: {dst_track['title']} - {yt_artist_name} - {dst_track['album'] if 'album' in dst_track else '<Unknown>'}"
+            f"[{len(tracks_added_set) + 1}/{src_track_len}] Youtube: {dst_track['title']} - {yt_artist_name} - {dst_track['album'] if 'album' in dst_track else '<Unknown>'}"
         )
 
         if dst_track["videoId"] in tracks_added_set:
-            print("(DUPLICATE, this track has already been added)")
+            print(f"[{len(tracks_added_set) + 1}/{src_track_len}] (DUPLICATE, this track has already been added)")
             duplicate_count += 1
         tracks_added_set.add(dst_track["videoId"])
 
         if not dry_run:
-            exception_sleep = 5
             for _ in range(10):
                 try:
                     if dst_pl_id is not None:
@@ -415,10 +417,11 @@ def copier(
                     break
                 except Exception as e:
                     print(
-                        f"ERROR: (Retrying add_playlist_items: {dst_pl_id} {dst_track['videoId']}) {e} in {exception_sleep} seconds"
+                        f"[{len(tracks_added_set) + 1}/{src_track_len}] ERROR: (Retrying add_playlist_items: {dst_pl_id} {dst_track['videoId']}) {e}"
                     )
-                    time.sleep(exception_sleep)
-                    exception_sleep *= 2
+                    input("SCRIPT PAUSED. Press any key to resume. If error was 401, update raw_headers.txt first.")
+                    setup_ytmusic_with_raw_headers()
+                    yt = get_ytmusic()
 
         if track_sleep:
             time.sleep(track_sleep)
